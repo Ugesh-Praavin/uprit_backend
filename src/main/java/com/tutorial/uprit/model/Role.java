@@ -6,5 +6,6 @@ package com.tutorial.uprit.model;
  */
 public enum Role {
     USER,
-    ADMIN
+    ADMIN,
+    FACULTY
 }

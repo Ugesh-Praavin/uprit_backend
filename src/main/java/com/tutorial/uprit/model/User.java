@@ -14,7 +14,12 @@ import java.util.List;
  * Tracks XP, level, coins, department, and role.
  */
 @Entity
-@Table(name = "users")
+@Table(name = "users", indexes = {
+        @Index(name = "idx_user_department", columnList = "department"),
+        @Index(name = "idx_user_year", columnList = "year"),
+        @Index(name = "idx_user_xp", columnList = "xp"),
+        @Index(name = "idx_user_role", columnList = "role")
+})
 @Getter
 @Setter
 @NoArgsConstructor

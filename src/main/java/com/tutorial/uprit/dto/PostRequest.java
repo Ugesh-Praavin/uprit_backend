@@ -6,7 +6,7 @@ import lombok.*;
 
 /**
  * DTO for creating an achievement post.
- * Note: xpAwarded is NOT accepted from client — calculated by backend.
+ * XP is NEVER accepted from client — calculated by backend.
  */
 @Getter
 @Setter
@@ -26,4 +26,7 @@ public class PostRequest {
 
     /** Optional image URL */
     private String imageUrl;
+
+    /** Certificate URL for verification proof */
+    private String certificateUrl;
 }

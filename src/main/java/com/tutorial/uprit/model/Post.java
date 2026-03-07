@@ -9,10 +9,14 @@ import java.time.LocalDateTime;
 
 /**
  * Post entity — represents a user's achievement posted to the feed.
- * XP is calculated automatically by the backend rules engine.
+ * Includes verification workflow and certificate support.
  */
 @Entity
-@Table(name = "posts")
+@Table(name = "posts", indexes = {
+        @Index(name = "idx_post_verification_status", columnList = "verificationStatus"),
+        @Index(name = "idx_post_created_at", columnList = "createdAt"),
+        @Index(name = "idx_post_user_id", columnList = "user_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -48,6 +52,31 @@ public class Post {
 
     /** Optional image URL for the achievement */
     private String imageUrl;
+
+    /** Certificate URL for verification proof */
+    private String certificateUrl;
+
+    // ═══════════════════════════════════════
+    // VERIFICATION FIELDS
+    // ═══════════════════════════════════════
+
+    /** Verification status — defaults to PENDING */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private VerificationStatus verificationStatus = VerificationStatus.PENDING;
+
+    /** Faculty member who verified this post */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "verified_by_id")
+    @JsonIgnore
+    private User verifiedBy;
+
+    /** When the post was verified/rejected */
+    private LocalDateTime verifiedAt;
+
+    /** Faculty comment on verification */
+    private String verificationComment;
 
     /** Auto-generated timestamp */
     @Column(nullable = false, updatable = false)

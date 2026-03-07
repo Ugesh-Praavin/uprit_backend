@@ -1,11 +1,10 @@
 package com.tutorial.uprit.dto;
 
 import lombok.*;
-
 import java.time.LocalDateTime;
 
 /**
- * DTO for returning achievement post data.
+ * DTO for returning achievement post data — includes verification info.
  */
 @Getter
 @Setter
@@ -22,5 +21,12 @@ public class PostResponse {
     private String achievementType;
     private Integer xpAwarded;
     private String imageUrl;
+    private String certificateUrl;
     private LocalDateTime createdAt;
+
+    // Verification fields
+    private String verificationStatus;
+    private String verifiedByName;
+    private LocalDateTime verifiedAt;
+    private String verificationComment;
 }
