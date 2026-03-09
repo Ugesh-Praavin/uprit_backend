@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,6 +48,8 @@ public class User {
 
     private String department;
 
+    private String avatarUrl;
+
     private Integer year;
 
     @Builder.Default
@@ -57,6 +60,15 @@ public class User {
 
     @Builder.Default
     private Integer coins = 0;
+
+    // Streak tracking
+    @Builder.Default
+    private Integer currentStreak = 0;
+
+    @Builder.Default
+    private Integer longestStreak = 0;
+
+    private LocalDate lastAchievementDate;
 
     @Enumerated(EnumType.STRING)
     @Builder.Default

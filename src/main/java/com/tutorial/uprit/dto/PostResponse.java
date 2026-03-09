@@ -29,4 +29,9 @@ public class PostResponse {
     private String verifiedByName;
     private LocalDateTime verifiedAt;
     private String verificationComment;
+
+    // Engagement metrics
+    private Long likeCount;
+    private Long commentCount;
+    private Boolean isLikedByCurrentUser;
 }

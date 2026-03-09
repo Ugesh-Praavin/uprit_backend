@@ -5,6 +5,8 @@ import com.tutorial.uprit.dto.PostResponse;
 import com.tutorial.uprit.exception.BadRequestException;
 import com.tutorial.uprit.exception.ResourceNotFoundException;
 import com.tutorial.uprit.model.*;
+import com.tutorial.uprit.repository.PostCommentRepository;
+import com.tutorial.uprit.repository.PostLikeRepository;
 import com.tutorial.uprit.repository.PostRepository;
 import com.tutorial.uprit.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,8 +18,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * PostService — handles achievement feed and verification operations.
- * Contains the XP rules engine and verification bonus system.
+ * PostService — handles achievement feed, verification, streak, and engagement.
  */
 @Service
 @RequiredArgsConstructor
@@ -25,6 +26,10 @@ public class PostService {
 
     private final PostRepository postRepository;
     private final UserRepository userRepository;
+    private final PostLikeRepository postLikeRepository;
+    private final PostCommentRepository postCommentRepository;
+    private final StreakService streakService;
+    private final NotificationService notificationService;
 
     // ═══════════════════════════════════════════════════════════════
     // XP RULES ENGINE
@@ -42,13 +47,12 @@ public class PostService {
         };
     }
 
-    /** Bonus XP awarded when faculty verifies a post (50% of base XP) */
     private int calculateVerificationBonus(AchievementType type) {
         return calculateXp(type) / 2;
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // CREATE POST
+    // CREATE POST (+ Streak Update)
     // ═══════════════════════════════════════════════════════════════
 
     @Transactional
@@ -86,11 +90,14 @@ public class PostService {
         user.setLevel(user.getXp() / 100);
         userRepository.save(user);
 
-        return mapToResponse(post);
+        // Update achievement streak
+        streakService.updateStreak(user);
+
+        return mapToResponse(post, null);
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // VERIFY POST (Faculty only)
+    // VERIFY POST (Faculty only) + Notification
     // ═══════════════════════════════════════════════════════════════
 
     @Transactional
@@ -133,9 +140,16 @@ public class PostService {
             student.setXp(student.getXp() + bonus);
             student.setLevel(student.getXp() / 100);
             userRepository.save(student);
+
+            // Notify student
+            notificationService.createNotification(
+                    student.getId(), facultyId,
+                    NotificationType.POST_VERIFIED,
+                    "Your achievement '" + post.getTitle() + "' was verified by " + faculty.getName(),
+                    postId);
         }
 
-        return mapToResponse(post);
+        return mapToResponse(post, null);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -157,7 +171,7 @@ public class PostService {
         post.setCertificateUrl(request.getCertificateUrl());
         postRepository.save(post);
 
-        return mapToResponse(post);
+        return mapToResponse(post, null);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -165,8 +179,14 @@ public class PostService {
     // ═══════════════════════════════════════════════════════════════
 
     public List<PostResponse> getFeed(Integer limit) {
+        return getFeedForUser(limit, null);
+    }
+
+    public List<PostResponse> getFeedForUser(Integer limit, Long currentUserId) {
         List<Post> posts = postRepository.findAllByOrderByCreatedAtDesc();
-        List<PostResponse> feed = posts.stream().map(this::mapToResponse).collect(Collectors.toList());
+        List<PostResponse> feed = posts.stream()
+                .map(p -> mapToResponse(p, currentUserId))
+                .collect(Collectors.toList());
 
         if (limit != null && limit > 0 && limit < feed.size()) {
             return feed.subList(0, limit);
@@ -178,12 +198,12 @@ public class PostService {
         userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
         return postRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(this::mapToResponse).collect(Collectors.toList());
+                .map(p -> mapToResponse(p, null)).collect(Collectors.toList());
     }
 
     public List<PostResponse> getPendingPosts() {
         return postRepository.findByVerificationStatusOrderByCreatedAtDesc(VerificationStatus.PENDING)
-                .stream().map(this::mapToResponse).collect(Collectors.toList());
+                .stream().map(p -> mapToResponse(p, null)).collect(Collectors.toList());
     }
 
     public void deletePost(Long postId) {
@@ -193,10 +213,15 @@ public class PostService {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // MAPPER
+    // MAPPER (includes engagement metrics)
     // ═══════════════════════════════════════════════════════════════
 
-    private PostResponse mapToResponse(Post post) {
+    private PostResponse mapToResponse(Post post, Long currentUserId) {
+        long likes = postLikeRepository.countByPostId(post.getId());
+        long comments = postCommentRepository.countByPostId(post.getId());
+        boolean isLiked = currentUserId != null
+                && postLikeRepository.existsByUserIdAndPostId(currentUserId, post.getId());
+
         return PostResponse.builder()
                 .id(post.getId())
                 .userId(post.getUser().getId())
@@ -212,6 +237,9 @@ public class PostService {
                 .verifiedByName(post.getVerifiedBy() != null ? post.getVerifiedBy().getName() : null)
                 .verifiedAt(post.getVerifiedAt())
                 .verificationComment(post.getVerificationComment())
+                .likeCount(likes)
+                .commentCount(comments)
+                .isLikedByCurrentUser(isLiked)
                 .build();
     }
 }
