@@ -52,7 +52,8 @@ public class PostService {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // CREATE POST (+ Streak Update)
+    // CREATE POST (stores XP value but does NOT award to user)
+    // XP is awarded only when faculty verifies.
     // ═══════════════════════════════════════════════════════════════
 
     @Transactional
@@ -70,6 +71,7 @@ public class PostService {
                             + "PROJECT_COMPLETION, INTERNSHIP, RESEARCH_PAPER, OTHER");
         }
 
+        // Calculate XP and store it, but do NOT add to user yet
         int xp = calculateXp(type);
 
         Post post = Post.builder()
@@ -85,19 +87,14 @@ public class PostService {
 
         postRepository.save(post);
 
-        // Award base XP
-        user.setXp(user.getXp() + xp);
-        user.setLevel(user.getXp() / 100);
-        userRepository.save(user);
-
-        // Update achievement streak
+        // Update achievement streak (tracks posting activity, not verification)
         streakService.updateStreak(user);
 
         return mapToResponse(post, null);
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // VERIFY POST (Faculty only) + Notification
+    // VERIFY POST (Faculty only) — awards XP here, not at creation
     // ═══════════════════════════════════════════════════════════════
 
     @Transactional
@@ -112,6 +109,7 @@ public class PostService {
             throw new BadRequestException("Only faculty or admin can verify posts");
         }
 
+        // Prevent double-verification
         if (post.getVerificationStatus() != VerificationStatus.PENDING) {
             throw new BadRequestException("Post has already been " + post.getVerificationStatus().name().toLowerCase());
         }
@@ -133,19 +131,28 @@ public class PostService {
         post.setVerificationComment(comment);
         postRepository.save(post);
 
-        // Award bonus XP on verification
+        User student = post.getUser();
+
         if (status == VerificationStatus.VERIFIED) {
-            User student = post.getUser();
-            int bonus = calculateVerificationBonus(post.getAchievementType());
-            student.setXp(student.getXp() + bonus);
+            // Award full XP: stored base XP + verification bonus
+            int totalXp = post.getXpAwarded() + calculateVerificationBonus(post.getAchievementType());
+            student.setXp(student.getXp() + totalXp);
             student.setLevel(student.getXp() / 100);
             userRepository.save(student);
 
-            // Notify student
+            // Notify student — verified
             notificationService.createNotification(
                     student.getId(), facultyId,
                     NotificationType.POST_VERIFIED,
-                    "Your achievement '" + post.getTitle() + "' was verified by " + faculty.getName(),
+                    "Your achievement '" + post.getTitle() + "' was verified! +" + totalXp + " XP awarded 🎉",
+                    postId);
+        } else {
+            // Notify student — rejected
+            String reason = (comment != null && !comment.isBlank()) ? comment : "No reason provided";
+            notificationService.createNotification(
+                    student.getId(), facultyId,
+                    NotificationType.POST_VERIFIED,
+                    "Your achievement '" + post.getTitle() + "' was rejected. Reason: " + reason,
                     postId);
         }
 
@@ -182,8 +189,11 @@ public class PostService {
         return getFeedForUser(limit, null);
     }
 
+    /**
+     * Public feed — only VERIFIED posts are visible.
+     */
     public List<PostResponse> getFeedForUser(Integer limit, Long currentUserId) {
-        List<Post> posts = postRepository.findAllByOrderByCreatedAtDesc();
+        List<Post> posts = postRepository.findByVerificationStatusOrderByCreatedAtDesc(VerificationStatus.VERIFIED);
         List<PostResponse> feed = posts.stream()
                 .map(p -> mapToResponse(p, currentUserId))
                 .collect(Collectors.toList());
@@ -192,6 +202,16 @@ public class PostService {
             return feed.subList(0, limit);
         }
         return feed;
+    }
+
+    /**
+     * Student's own posts — includes all statuses (PENDING, VERIFIED, REJECTED).
+     */
+    public List<PostResponse> getMyPosts(Long userId) {
+        userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        return postRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .map(p -> mapToResponse(p, userId)).collect(Collectors.toList());
     }
 
     public List<PostResponse> getPostsByUser(Long userId) {

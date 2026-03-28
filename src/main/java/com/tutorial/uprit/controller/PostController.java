@@ -60,6 +60,15 @@ public class PostController {
     }
 
     /**
+     * GET /api/posts/my?userId={userId} — get own posts (includes PENDING, VERIFIED, REJECTED).
+     * Used in student profile to show post status badges.
+     */
+    @GetMapping("/my")
+    public ResponseEntity<List<PostResponse>> getMyPosts(@RequestParam Long userId) {
+        return ResponseEntity.ok(postService.getMyPosts(userId));
+    }
+
+    /**
      * DELETE /api/posts/{id} — delete a post.
      */
     @DeleteMapping("/{id}")

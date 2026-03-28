@@ -5,6 +5,7 @@ import com.tutorial.uprit.model.VerificationStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -24,4 +25,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
     /** Count all posts by user */
     long countByUserId(Long userId);
+
+    /** Auto-expiry: find PENDING posts older than a cutoff date */
+    List<Post> findByVerificationStatusAndCreatedAtBefore(VerificationStatus status, LocalDateTime cutoff);
 }
